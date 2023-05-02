@@ -25,7 +25,7 @@ library(reticulate)
 Pdf to HTML conversion fuction
 ```{r}
 pdf_source_dir <- "Included-fulltexts-PDF/test"
-html_output_dir <- "Included-fulltexts-PDF/test/html2"
+html_output_dir <- "Included-fulltexts-PDF/test/html"
 
 fitz <- import("fitz")
 
