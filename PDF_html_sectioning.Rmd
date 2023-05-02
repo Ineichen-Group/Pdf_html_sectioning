@@ -1,0 +1,128 @@
+---
+title: "Text_Mining"
+output: html_document
+date: "2023-03-13"
+---
+
+```{r message=FALSE, warning=FALSE}
+library(pdftools)
+library(limma)
+library(dplyr)
+library(tidyverse)
+library(readxl)
+library(rvest)
+library(stringr)
+library(htmltools)
+library(htmlwidgets)
+library(writexl)
+library(formattable)
+library(caret)
+library(data.table)
+library(rvest)
+library(reticulate)
+```
+
+Pdf to HTML conversion fuction
+```{r}
+pdf_source_dir <- "Included-fulltexts-PDF/test"
+html_output_dir <- "Included-fulltexts-PDF/test/html2"
+
+fitz <- import("fitz")
+
+pdf_files <- list.files(pdf_source_dir, pattern = "*.pdf", full.names = TRUE)
+
+for (file_path in pdf_files) {
+  file_name_html <- gsub(".pdf", ".html", basename(file_path))
+  doc <- fitz$open(file_path)
+  doc_text <- '<div id="page0" style="width:595.3pt;height:793.7pt">'
+  for (p_nr in 0:(doc$page_count - 1)) {
+    page <- doc$load_page(p_nr)
+    text <- page$get_text("html")
+    text <- gsub("<div.*?>|</div>", "", text, perl = TRUE)
+    text <- gsub("<img.*?>", "", text, perl = TRUE) # trying to get rid of images
+    doc_text <- paste(doc_text, text, sep = "")
+  }
+  doc_text <- paste(doc_text, "</div>", sep = "")
+  write(doc_text, file.path(html_output_dir, file_name_html))
+  doc$close()
+}
+```
+
+
+```{r message=FALSE, warning=FALSE}
+temp_mapping_function<-function(html_file){
+  
+html_text <- tolower(readLines(html_file))
+
+pattern_intro <- "<span(.+?)introduction(.+?)an>" #define the pattern to look for in the titles
+
+matched_text_intro <- unique(str_extract_all(html_text, pattern_intro, simplify = TRUE)) #extract the pattern
+matched_text_intro<-unique(matched_text_intro[matched_text_intro != ""])
+
+if (length(matched_text_intro)==1) {
+matched_text_intro<-matched_text_intro
+} else {
+  
+intro_font_size<-paste0(digits(max(data.frame(matched_text_intro) %>%
+  mutate(font_size=regmatches(matched_text_intro, gregexpr("[0-9]+.[0-9]+pt", matched_text_intro))) %>% 
+  unnest(font_size) %>% 
+  mutate(font_size=as.numeric(gsub("pt","",font_size))) %>% 
+  select(font_size) %>% pull()),1),"pt")
+    
+matched_text_intro<-data.frame(matched_text_intro) %>% 
+  filter(grepl(intro_font_size,matched_text_intro)) %>% pull()
+# 
+# matched_text_intro<-matched_text_intro[grepl(intro_font_size, matched_text_intro)]  
+}
+
+general_pattern<-gsub("(>[^<]*)\\b\\d+\\b([^<]*<)", "\\1[0-9]+\\2", matched_text_intro) #generalize it to all the titles
+general_pattern<-gsub("introduction", "(.+?)", general_pattern)
+
+matched_texts<-unique(str_extract_all(html_text, general_pattern, simplify = TRUE)) #look for all the titles
+
+sections<-matched_texts[grepl("introduction|method|results|discussion|references", matched_texts)] #define the sections
+
+sections_df<-
+  data.frame(html_text) %>% 
+  mutate(match=str_extract_all(html_text, paste0(sections, collapse = "|"), simplify = TRUE)) %>% 
+  mutate(start=1:n()) %>% 
+  filter(!(match=="")) %>% 
+  mutate(match=str_extract_all(match, "introduction|method|results|discussion|references", simplify = TRUE)) %>% 
+  select(!(html_text)) %>% 
+  mutate(end = lead(start)-1) %>% 
+  replace_na(list(end=length(html_text))) %>% 
+    rbind(data.frame(match="paper",start=0,end=length(html_text)))
+
+temp.x.intro <- paste(gsub("<.*?>", "", html_text[sections_df$start[sections_df$match=="introduction"]:sections_df$end[sections_df$match=="introduction"]]), collapse = " ")
+
+temp.x.intro<-gsub("<img(.+?)>","",temp.x.intro)
+  
+  temp.x.method <- paste(gsub("<[^>]+>", "", html_text[sections_df$start[sections_df$match=="method"]:sections_df$end[sections_df$match=="method"]]), collapse = " ")
+
+  temp.x.method<-gsub("<img(.+?)>","",temp.x.method)  
+  
+  temp.x.result <- paste(gsub("<.*?>", "", html_text[sections_df$start[sections_df$match=="results"]:sections_df$end[sections_df$match=="results"]]), collapse = " ")
+  
+  temp.x.result<-gsub("<img(.+?)>","",temp.x.result) 
+  
+  temp.x.discussion <- paste(gsub("<.*?>", "", html_text[sections_df$start[sections_df$match=="discussion"]:sections_df$end[sections_df$match=="discussion"]]), collapse = " ")
+  
+  temp.x.discussion<-gsub("<img(.+?)>","",temp.x.discussion) 
+  
+  temp.x.paper <- paste(gsub("<.*?>", "", html_text[sections_df$start[sections_df$match=="paper"]:sections_df$end[sections_df$match=="paper"]]), collapse = " ")
+
+   temp.x.paper<-gsub("<img(.+?)>","",temp.x.paper) 
+  
+  return(list(
+              introduction=temp.x.intro,
+              methods=temp.x.method,
+              results=temp.x.result,
+              discussion=temp.x.discussion,
+              paper=temp.x.paper))
+
+}
+
+
+temp_mapping_function("Included-fulltexts-PDF/test/html/Alexander_2018_Burns.html")u
+
+```
